@@ -23,17 +23,25 @@ namespace CheckDenFaktTrustedPublisher
             string url = req.Url;
             Uri.TryCreate(url, UriKind.Absolute, out Uri uri);
 
-            string domain = uri.DnsSafeHost;
-            string uriWithoutScheme = uri.Host + uri.PathAndQuery;
+            string domain = uri.DnsSafeHost.ToLowerInvariant();
 
-            decimal trustScore = req.TrustScore;
+            if (domain.StartsWith("www."))
+            {
+                domain = domain.Replace("www.", "");
+            }
+
+            string uriWithoutScheme = domain + uri.PathAndQuery.Replace("/", "").ToLowerInvariant().TrimEnd('/');
+
+            double trustScore = req.TrustScore;
+            string reason = req.Reason;
 
             return new Publisher()
             {
                 PartitionKey = domain,
-                trustScore = trustScore,
-                RowKey = uriWithoutScheme.Replace("/", ""),
-                Url = uriWithoutScheme
+                TrustScore = trustScore,
+                RowKey = uriWithoutScheme,
+                Url = uriWithoutScheme,
+                Reason = reason
             };
         }
     }

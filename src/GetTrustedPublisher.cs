@@ -11,6 +11,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using Microsoft.WindowsAzure.Storage;
 using System.Collections.Generic;
 using CheckDenFakt.TrustedPublisher.Models;
+using System.Linq;
 
 namespace CheckDenFakt.TrustedPublisher
 {
@@ -18,7 +19,7 @@ namespace CheckDenFakt.TrustedPublisher
     {
         [FunctionName("GetTrustedPublisher")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] Request req, [Table("Members")] CloudTable cloudTable,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] Request req, [Table("Publisher")] CloudTable cloudTable,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
@@ -40,10 +41,17 @@ namespace CheckDenFakt.TrustedPublisher
                 string url = req.Url;
 
                 Uri.TryCreate(url, UriKind.Absolute, out Uri uri);
-                string domain = uri.DnsSafeHost;
+                string domain = uri.DnsSafeHost.ToLowerInvariant();
+
+                if (domain.StartsWith("www."))
+                {
+                    domain = domain.Replace("www.", "");
+                }
+
+                string uriWithoutScheme = domain + uri.PathAndQuery.Replace("/", "").ToLowerInvariant().TrimEnd('/');
 
                 TableQuery<Publisher> rangeQuery = new TableQuery<Publisher>().Where(
-                    TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, domain));
+                    TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, domain) );
 
                 List<Publisher> list = new List<Publisher>();
 
@@ -53,7 +61,15 @@ namespace CheckDenFakt.TrustedPublisher
                     list.Add(entity);
                 }
 
-                return new OkObjectResult(list);
+                foreach (var item in list.OrderByDescending(x => x.RowKey.Length))
+                {
+                    if (uriWithoutScheme.StartsWith(item.RowKey))
+                    {
+                        return new OkObjectResult(item);
+                    }
+                }
+
+                return new NotFoundObjectResult(null);
             }
             catch (Exception ex)
             {
@@ -61,6 +77,16 @@ namespace CheckDenFakt.TrustedPublisher
                 log.LogDebug(ex.StackTrace);
                 throw;
             }
+        }
+
+        private static int QueryOrder(string query, string value)
+        {
+            if (value == query)
+                return -1;
+            if (value.Contains(query))
+                return 0;
+
+            return 1;
         }
     }
 }

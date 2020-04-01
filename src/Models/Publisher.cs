@@ -17,6 +17,8 @@ namespace CheckDenFakt.TrustedPublisher.Models
 
         public string Url { get; set; }
 
-        public decimal trustScore { get; set; }
+        public double TrustScore { get; set; }
+
+        public string Reason { get; set; }
     }
 }
