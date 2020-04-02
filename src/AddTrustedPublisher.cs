@@ -40,7 +40,7 @@ namespace CheckDenFaktTrustedPublisher
                 PartitionKey = domain,
                 TrustScore = trustScore,
                 RowKey = uriWithoutScheme,
-                Url = uriWithoutScheme,
+                Url = url,
                 Reason = reason
             };
         }

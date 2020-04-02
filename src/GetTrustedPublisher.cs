@@ -17,6 +17,23 @@ namespace CheckDenFakt.TrustedPublisher
 {
     public static class GetTrustedPublisher
     {
+        [FunctionName("GetAllPublisher")]
+        public static async Task<IActionResult> GetAll([HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] dynamic req, [Table("Publisher")] CloudTable cloudTable,
+            ILogger log)
+        {
+            TableQuery<Publisher> rangeQuery = new TableQuery<Publisher>();
+
+            List<Publisher> publishers = new List<Publisher>();
+
+            // Execute the query and loop through the results
+            foreach (var entity in await cloudTable.ExecuteQuerySegmentedAsync(rangeQuery, null).ConfigureAwait(false))
+            {
+                publishers.Add(entity);
+            }
+
+            return new OkObjectResult(publishers);
+        }
+
         [FunctionName("GetTrustedPublisher")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] Request req, [Table("Publisher")] CloudTable cloudTable,
@@ -77,16 +94,6 @@ namespace CheckDenFakt.TrustedPublisher
                 log.LogDebug(ex.StackTrace);
                 throw;
             }
-        }
-
-        private static int QueryOrder(string query, string value)
-        {
-            if (value == query)
-                return -1;
-            if (value.Contains(query))
-                return 0;
-
-            return 1;
         }
     }
 }
