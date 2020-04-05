@@ -7,6 +7,11 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Microsoft.WindowsAzure.Storage.Table;
+using Microsoft.WindowsAzure.Storage;
+using System.Collections.Generic;
+using CheckDenFakt.TrustedPublisher.Models;
+using System.Linq;
 
 namespace CheckDenFaktTrustedPublisher
 {
@@ -14,22 +19,68 @@ namespace CheckDenFaktTrustedPublisher
     {
         [FunctionName("UpdateTrustedPublisher")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] Update_Request req, [Table("Publisher")] CloudTable cloudTable,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            string name = req.Query["name"];
+              #region Null Checks
+            if (cloudTable == null)
+            {
+                throw new ArgumentNullException(nameof(cloudTable));
+            }
+            #endregion
 
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
-            name = name ?? data?.name;
+            try
+            {
+                if (!Uri.IsWellFormedUriString(req.Url, UriKind.Absolute))
+                {
+                    throw new FormatException("Url isn't well formed!");
+                }
 
-            string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
+                string url = req.Url;
 
-            return new OkObjectResult(responseMessage);
+                Uri.TryCreate(url, UriKind.Absolute, out Uri uri);
+                string domain = uri.DnsSafeHost.ToLowerInvariant();
+
+                if (domain.StartsWith("www."))
+                {
+                    domain = domain.Replace("www.", "");
+                }
+
+                string uriWithoutScheme = domain + uri.PathAndQuery.Replace("/", "").ToLowerInvariant().TrimEnd('/');
+
+                TableQuery<Publisher> rangeQuery = new TableQuery<Publisher>().Where(
+                    TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, domain) );
+
+                List<Publisher> list = new List<Publisher>();
+
+                // Execute the query and loop through the results
+                foreach (var entity in await cloudTable.ExecuteQuerySegmentedAsync(rangeQuery, null).ConfigureAwait(false))
+                {
+                    list.Add(entity);
+                }
+
+                foreach (var item in list.OrderByDescending(x => x.RowKey.Length))
+                {
+                    if (uriWithoutScheme.StartsWith(item.RowKey))
+                    {
+                        // gefunden -> update trust score
+                        item.TrustScore = req.TrustScore;
+                        var operation = TableOperation.Replace(item);
+                        await cloudTable.ExecuteAsync(operation);
+                        return new OkObjectResult(item);
+                    }
+                }
+
+                return new NotFoundObjectResult(null);
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex.Message);
+                log.LogDebug(ex.StackTrace);
+                throw;
+            }
         }
     }
 }
