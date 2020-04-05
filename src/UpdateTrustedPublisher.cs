@@ -66,7 +66,10 @@ namespace CheckDenFaktTrustedPublisher
                     if (uriWithoutScheme.StartsWith(item.RowKey))
                     {
                         // gefunden -> update trust score
+                        item.Url = req.Url;
                         item.TrustScore = req.TrustScore;
+                        item.Reason = req.Reason;
+                        
                         var operation = TableOperation.Replace(item);
                         await cloudTable.ExecuteAsync(operation);
                         return new OkObjectResult(item);

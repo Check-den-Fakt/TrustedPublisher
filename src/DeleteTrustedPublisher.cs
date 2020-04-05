@@ -11,6 +11,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using CheckDenFakt.TrustedPublisher.Models;
 using Microsoft.WindowsAzure.Storage;
 
+
 namespace CheckDenFaktTrustedPublisher
 {
     public static class DeleteTrustedPublisher
@@ -33,8 +34,11 @@ namespace CheckDenFaktTrustedPublisher
                 throw new ArgumentNullException(nameof(cloudTable));
             }
             #endregion
+            
+            string partkey = req.PartitionKey;
+            string rowkey = req.RowKey;
 
-            var entity = new DynamicTableEntity(req.PartitionKey, req.RowKey)
+            var entity = new DynamicTableEntity(partkey, rowkey)
             {
                 ETag = "*"
             };
